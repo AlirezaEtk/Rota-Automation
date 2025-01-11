@@ -1,0 +1,82 @@
+
+!pip install xgboost pandas scikit-learn matplotlib -q
+
+import pandas as pd
+import numpy as np
+from xgboost import XGBRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
+
+from google.colab import files
+uploaded = files.upload()
+
+file_name = list(uploaded.keys())[0] 
+data = pd.read_excel(file_name)
+
+data['Date'] = pd.to_datetime(data['Date'])
+data['Day_of_Week'] = data['Date'].dt.dayofweek  
+data['Month'] = data['Date'].dt.month       
+
+valid_months = [12, 1, 2, 3]  
+data = data[data['Month'].isin(valid_months)]
+
+features = ['Holiday Event', 'Day_of_Week', 'Month']
+targets = ['Breakfast', 'Lunch', 'Dinner']
+
+X = data[features]
+results = {}
+
+for target in targets:
+    y = data[target]
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+
+    model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.1, random_state=42)
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test)
+
+    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+    results[target] = {'Model': model, 'RMSE': rmse}
+    print(f'{target} RMSE: {rmse}')
+
+future_dates = pd.date_range(start='2024-12-01', end='2025-03-31', freq='D')  
+future_data = pd.DataFrame({'Date': future_dates})
+future_data['Day_of_Week'] = future_data['Date'].dt.dayofweek
+future_data['Month'] = future_data['Date'].dt.month
+
+future_data['Holiday Event'] = 0 
+
+
+future_data = future_data[future_data['Month'].isin(valid_months)]
+
+for target in targets:
+    model = results[target]['Model']
+    future_data[target] = model.predict(future_data[features])
+
+forecast_output = future_data[['Date', 'Breakfast', 'Lunch', 'Dinner']]
+forecast_output.to_csv('forecasted_sales_2024_2025.csv', index=False)
+print("Forecast saved as 'forecasted_sales_2024_2025.csv'")
+
+plt.figure(figsize=(14, 8))
+for target in targets:
+    plt.plot(data['Date'], data[target], label=f'Actual {target}', marker='o')
+plt.legend()
+plt.title('Actual Sales for Breakfast, Lunch, and Dinner (Dec 2023 to Mar 2024)')
+plt.xlabel('Date')
+plt.ylabel('Sales')
+plt.grid(True)
+plt.show()
+
+plt.figure(figsize=(14, 8))
+for target in targets:
+    plt.plot(forecast_output['Date'], forecast_output[target], label=f'Forecasted {target}', linestyle='--')
+plt.legend()
+plt.title('Forecasted Sales for Breakfast, Lunch, and Dinner (Dec 2024 to Mar 2025)')
+plt.xlabel('Date')
+plt.ylabel('Sales')
+plt.grid(True)
+plt.show()
+
